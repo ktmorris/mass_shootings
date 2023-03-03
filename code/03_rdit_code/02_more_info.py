@@ -33,7 +33,7 @@ j = df5.Incident_ID.unique()
 
 b = 0
 
-l = os.listdir("raw_data/extra_info/") + os.listdir("C:/Users/morrisk/OneDrive - Brennan Center for Justice/Desktop/extra_info/")
+l = os.listdir("raw_data/extra_info/")
 
 for i in j:
   
@@ -53,7 +53,7 @@ for i in j:
     
     page = driver.page_source
     
-    file_ = open('C:/Users/morrisk/OneDrive - Brennan Center for Justice/Desktop/extra_info/inc_' + str(i) + ".html", 'w')
+    file_ = open('raw_data/extra_info/inc_' + str(i) + ".html", 'w')
     
     file_.write(page)
     
@@ -64,16 +64,17 @@ for i in j:
 
 
 
-print("done")
 
+l = os.listdir("raw_data/extra_info/")
 
-url = "C:/Users/morrisk/OneDrive - Brennan Center for Justice/Desktop/extra_info/inc_1806368.html"
-with open(url) as fp:
-    soup = BeautifulSoup(fp, 'html.parser')
-
-text = soup.get_text()
-
-with open("C:/Users/morrisk/OneDrive - Brennan Center for Justice/Desktop/output.txt", "a") as f:
-  print(text, file = f)
+for i in l:
+  url = "raw_data/extra_info/" + i
   
-print("d")
+  
+  with open(url) as fp:
+    soup = BeautifulSoup(fp, 'html.parser')
+    
+  text = soup.get_text()
+  
+  with open("raw_data/extra_info/" + i.replace(".html", "") + "_output.txt", "a") as f:
+    print(text, file = f)
