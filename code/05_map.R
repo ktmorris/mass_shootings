@@ -13,11 +13,7 @@ state_map <- fortify(state_map)
 
 ###################################
 ## read killings data
-full_set <- readRDS("temp/geocoded_shootings.rds") %>% 
-  ungroup() %>% 
-  mutate(id2 = row_number(),
-         score = ifelse(is.na(score), 100, as.numeric(score))) %>% 
-  filter(score > 95)
+full_set <- readRDS("temp/geocoded_shootings.rds")
 ## keep killings within 2 months of 2016, 2020 election
 pre_post <- filter(full_set,
                    (date >= as.Date("2020-11-03") - months(6) &
@@ -27,10 +23,15 @@ pre_post <- filter(full_set,
   mutate(year = floor(year(date) / 2) * 2,
          pre = date < "2016-11-08" | (year == 2020 & date < "2020-11-03"))
 
-h <- st_as_sf(pre_post, coords = c("longitude", "latitude"),
+pre_post <- merge(pre_post, fips_codes |> 
+                    select(state_code, state_name) |> 
+                    rename(state = state_name) |> 
+                    distinct())
+
+h <- st_as_sf(pre_post, coords = c("lon", "lat"),
                      crs = "+proj=longlat +datum=NAD83 +no_defs")
 
-h <- shift_geometry(h)
+h <- shift_geometry(h, geoid_column = "state_code")
 
 h <- as_Spatial(h)
 

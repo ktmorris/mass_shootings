@@ -66,6 +66,7 @@ assess_2020 <- function(s){
   print(state)
   ## pull BG shapefiles using tigris package
   bgs <- readOGR(dsn = s, layer = substring(list.files(s)[1], 1, nchar(list.files(s)[1]) - 4))
+  bgs <- spTransform(bgs, CRS("+proj=longlat +datum=NAD83 +no_defs"))
   
   centroids <- SpatialPoints(
     gCentroid(bgs, byid = TRUE)@coords
@@ -102,11 +103,12 @@ assess_2016 <- function(s){
   library(tidyverse)
   
   state <- substring(list.files(s)[1], 1, 2)
-  if(!(file.exists(paste0("temp/precincts_16_dists_new_", state, ".rds")))){
+  #if(!(file.exists(paste0("temp/precincts_16_dists_new_", state, ".rds")))){
     
   print(state)
   ## pull BG shapefiles using tigris package
   bgs <- readOGR(dsn = s, layer = substring(list.files(s)[1], 1, nchar(list.files(s)[1]) - 4))
+  bgs <- spTransform(bgs, CRS("+proj=longlat +datum=NAD83 +no_defs"))
   
   centroids <- SpatialPoints(
     gCentroid(bgs, byid = TRUE)@coords
@@ -128,7 +130,7 @@ assess_2016 <- function(s){
   }))
   
   saveRDS(tot, paste0("temp/precincts_16_dists_new_", state, ".rds"))
-  }
+  #}
 }
 
 cl <- makeCluster(8)  
@@ -151,3 +153,78 @@ files <- c(list.files(path = "temp/", pattern = "^precincts_dists_new_*", full.n
 all_bgs <- rbindlist(lapply(files, readRDS))
 
 saveRDS(all_bgs, "temp/precinct_demshare.rds")
+
+############################################################
+
+b2p <- function(state){
+  
+  library(tigris)
+  library(rgdal)
+  library(sf)
+  library(sp)
+  library(rgeos)
+  library(SearchTrees)
+  library(raster)
+  library(data.table)
+  library(tidyverse)
+  
+  #if(!(file.exists(paste0("temp/p2b_", state, ".rds")))){
+    bgs <- tigris::blocks(state = state, class = "sp", year = 2019)
+    
+    bgs@data <- bgs@data |> 
+      mutate(across(c('INTPTLON10','INTPTLAT10'), as.numeric))
+    
+    
+    pct <- readOGR(paste0("../regular_data/vest/vest_2016/2016/", tolower(state), "_2016"),
+                   paste0(tolower(state), "_2016"))
+    pct <- spTransform(pct, CRS("+proj=longlat +datum=NAD83 +no_defs"))
+    
+    pct@data$GEOID <- paste0(state, c(1:nrow(pct@data)))
+    
+    pings  <- SpatialPoints(bgs@data[,c('INTPTLON10','INTPTLAT10')], proj4string = pct@proj4string)
+    bgs$precinct <- over(pings, pct)$GEOID
+    
+    h16 <- bgs@data |> 
+      mutate(state = state,
+             year = 2016)
+    
+    if(state == "KY"){
+      
+      pct <- readOGR(paste0("../regular_data/vest/vest_2020/", tolower(state), "_2020_vtd_estimates"),
+                     paste0(tolower(state), "_2020_vtd_estimates"))
+    }else{
+      pct <- readOGR(paste0("../regular_data/vest/vest_2020/", tolower(state), "_2020"),
+                     paste0(tolower(state), "_2020"))
+    }
+    pct <- spTransform(pct, CRS("+proj=longlat +datum=NAD83 +no_defs"))
+    
+    pct@data$GEOID <- paste0(state, c(1:nrow(pct@data)))
+    pings  <- SpatialPoints(bgs@data[,c('INTPTLON10','INTPTLAT10')], proj4string = pct@proj4string)
+    bgs$precinct <- over(pings, pct)$GEOID
+    
+    h20 <- bgs@data |> 
+      mutate(state = state,
+             year = 2020)
+    
+    saveRDS(bind_rows(h16, h20),
+            paste0("temp/p2b_", state, ".rds"))
+  #}
+}
+
+cl <- makeCluster(8)  
+registerDoParallel(cl)
+
+clusterExport(cl, list("b2p"))
+
+states <- unique(filter(fips_codes, state_code <= "56")$state)
+
+c(parLapply(cl, states,
+            fun = b2p))
+
+
+files <- list.files(path = "temp/", pattern = "^p2b*", full.names = T)
+
+all_p2b <- rbindlist(lapply(files, readRDS)) |> 
+  select(GEOID10, precinct, state, year)
+
+saveRDS(all_p2b, "temp/precinct_block.rds")
